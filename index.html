@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Генератор фракталов</title>
+    <style>
+        body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f4f4f9;
+}
+
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+}
+
+form {
+    margin-bottom: 30px;
+}
+
+label {
+    font-weight: bold;
+}
+
+input,
+select,
+button {
+    margin: 5px 0 20px;
+    padding: 8px;
+    width: 100%;
+    max-width: 300px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+button {
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+#result {
+    text-align: center;
+}
+
+#fractal-image {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Генератор фракталов</h1>
+        <form id="fractal-form">
+            <!-- Параметры фрактала -->
+            <label for="fractal_type">Выберите тип фрактала:</label>
+            <select id="fractal_type" name="fractal_type">
+                <option value="mandelbrot">Фрактал Мандельброта</option>
+                <option value="sierpinski">Треугольники Серпинского</option>
+                <option value="julia">Множество Жуля</option>
+            </select><br><br>
+
+            <div id="julia-params" style="display: none;">
+                <label for="c_real">действительная часть c:</label>
+                <input type="number" id="c_real" name="c_real" value="-0.7" step="0.01"><br>
+                <label for="c_imag">Мнимая часть c:</label>
+                <input type="number" id="c_imag" name="c_imag" value="0.27015" step="0.01"><br><br>
+            </div>
+
+            <label for="xmin">xmin:</label>
+            <input type="number" id="xmin" name="xmin" value="-2.0" step="0.1"><br><br>
+
+            <label for="xmax">xmax:</label>
+            <input type="number" id="xmax" name="xmax" value="1.0" step="0.1"><br><br>
+
+            <label for="ymin">ymin:</label>
+            <input type="number" id="ymin" name="ymin" value="-1.5" step="0.1"><br><br>
+
+            <label for="ymax">ymax:</label>
+            <input type="number" id="ymax" name="ymax" value="1.5" step="0.1"><br><br>
+
+            <label for="width">Ширина:</label>
+            <input type="number" id="width" name="width" value="800"><br><br>
+
+            <label for="height">Высота:</label>
+            <input type="number" id="height" name="height" value="800"><br><br>
+
+            <label for="max_iter">Количество итераций:</label>
+            <input type="number" id="max_iter" name="max_iter" value="256"><br><br>
+
+            <button type="button" id="generate-button">Сгенерировать фрактал</button>
+        </form>
+        <div id="result">
+            <h3>Сгенерированный фрактал:</h3>
+            <img id="fractal-image" src="" alt="Изображение фрактала">
+            <p id="elapsed-time"></p> <!-- Элемент для отображения времени выполнения -->
+        </div>
+
+    </div>
+
+    <script>
+// URL вашего сервера
+const server_url = "http://localhost:5000/fractal";
+
+// Функция для генерации фрактала
+async function generateFractal() {
+    // Сбор данных из формы
+    const form = document.getElementById('fractal-form');
+    const data = new FormData(form);
+    const settings = Object.fromEntries(data.entries());
+
+    // Преобразование параметров в нужный формат
+    settings.xmin = parseFloat(settings.xmin);
+    settings.xmax = parseFloat(settings.xmax);
+    settings.ymin = parseFloat(settings.ymin);
+    settings.ymax = parseFloat(settings.ymax);
+    settings.width = parseInt(settings.width);
+    settings.height = parseInt(settings.height);
+    settings.max_iter = parseInt(settings.max_iter);
+
+    // Если выбран фрактал Julia, добавляем параметры c_real и c_imag
+    if (settings.fractal_type === 'julia') {
+        settings.c_real = parseFloat(settings.c_real);
+        settings.c_imag = parseFloat(settings.c_imag);
+    }
+
+    console.log("Отправляем настройки:", settings);
+
+    try {
+        // Отправка POST-запроса на сервер
+        const response = await fetch(server_url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settings)
+        });
+
+        // Обработка ответа
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const img = document.getElementById('fractal-image');
+            URL.revokeObjectURL(img.src); // Удалить старый URL
+            img.src = url; // Установить новый URL
+
+            // Логирование всех заголовков ответа
+            response.headers.forEach((value, name) => {
+                console.log(`${name}: ${value}`);
+            });
+
+            // Получение времени выполнения из заголовков ответа
+            let elapsedTime = response.headers.get('X-Elapsed-Time');
+            console.log("Время выполнения:", elapsedTime); // Логирование времени выполнения
+            if (elapsedTime) {
+                elapsedTime = parseFloat(elapsedTime).toFixed(2); // Округление до 2 знаков после запятой
+                const elapsedTimeElement = document.getElementById('elapsed-time');
+                elapsedTimeElement.textContent = `Время выполнения: ${elapsedTime} секунд`;
+            } else {
+                console.error("Не удалось получить время выполнения из заголовков ответа");
+            }
+        } else {
+            console.error("Ошибка при генерации фрактала", response.status, response.statusText);
+        }
+    } catch (error) {
+        console.error("Ошибка при отправке запроса:", error);
+    }
+}
+
+// Скрытие/показ параметров для фрактала Жуля
+document.getElementById('fractal_type').addEventListener('change', function () {
+    const juliaParams = document.getElementById('julia-params');
+    if (this.value === 'julia') {
+        juliaParams.style.display = 'block';
+    } else {
+        juliaParams.style.display = 'none';
+    }
+});
+
+// Назначение обработчика события для кнопки после загрузки страницы
+document.getElementById('generate-button').addEventListener('click', generateFractal);
+
+    </script>
+</body>
+
+</html>
